@@ -1,1 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#07111f" />
+    <meta name="description" content="Forge 锻造AI训战营发起的 AI 能力段位小测试：15 个真实工作情境，测出你的 AI 实战层级、身份徽章与升级路径。" />
+    <title>AI LEVEL｜Forge 锻造AI训战营</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+    <script src="./config.js" defer></script>
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <div class="ambient" aria-hidden="true">
+      <span class="orb orb-a"></span>
+      <span class="orb orb-b"></span>
+      <span class="grid"></span>
+    </div>
 
+    <main id="app" class="app-shell" aria-live="polite"></main>
+
+    <template id="brand-template">
+      <header class="topbar">
+        <button class="brand" data-action="home" aria-label="返回首页">
+          <span class="brand-mark">F</span>
+          <span>
+            <b>AI LEVEL</b>
+            <small>Forge 锻造AI训战营发起</small>
+          </span>
+        </button>
+        <nav class="top-actions" aria-label="页面导航">
+          <button class="ghost-link" data-action="about">测评依据</button>
+          <button class="ghost-link admin-link" data-action="admin">后台</button>
+        </nav>
+      </header>
+    </template>
+
+    <div id="toast" class="toast" role="status"></div>
+  </body>
+</html>
