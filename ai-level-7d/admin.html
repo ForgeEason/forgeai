@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>7维AI段位测评后台｜Forge 锻造AI训战营</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./config.js"></script>
+  <style>
+    :root{color-scheme:dark;--bg:#0e0a1f;--card:#1c1640;--pri:#8b5cf6;--pri2:#22d3ee;--txt:#f5f3ff;--mut:#b8b0d8;--line:#34294f;--ok:#34d399;--warn:#f87171;--gold:#fbbf24}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(120% 80% at 50% -10%,#2a1a5e 0%,var(--bg) 55%);color:var(--txt);font-family:"PingFang SC","Microsoft YaHei",system-ui,-apple-system,sans-serif}
+    .wrap{max-width:1120px;margin:0 auto;padding:28px 18px 60px}.brand{display:flex;align-items:center;gap:10px;color:var(--mut);font-size:13px}.mk{font-weight:900;letter-spacing:1.5px;color:#fff;background:linear-gradient(90deg,var(--pri),#6d28d9);padding:4px 10px;border-radius:7px}
+    h1{font-size:clamp(34px,6vw,58px);line-height:1.08;margin:20px 0 8px}.grad{background:linear-gradient(90deg,var(--pri),var(--pri2));-webkit-background-clip:text;background-clip:text;color:transparent}.lead{color:var(--mut);line-height:1.7}
+    .card{background:rgba(28,22,64,.86);border:1px solid var(--line);border-radius:18px;padding:18px;margin-top:16px;box-shadow:0 22px 80px rgba(0,0,0,.25)}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat b{display:block;font-size:34px;margin-top:6px}.stat small{color:var(--mut)}
+    input,button{font:inherit}input{width:100%;background:#120d2b;border:1px solid var(--line);border-radius:12px;color:var(--txt);padding:13px 14px;outline:none}button{border:0;border-radius:12px;padding:13px 16px;font-weight:800;cursor:pointer;color:#fff;background:linear-gradient(90deg,var(--pri),#6d28d9)}button.alt{background:transparent;border:1px solid var(--line);color:var(--mut)}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.bars{display:grid;gap:12px}.barrow{display:grid;grid-template-columns:92px 1fr 42px;gap:10px;align-items:center;font-size:13px}.bar{height:8px;background:#34294f;border-radius:99px;overflow:hidden}.bar span{display:block;height:100%;background:linear-gradient(90deg,var(--pri),var(--pri2))}
+    details{border:1px solid var(--line);border-radius:14px;padding:0;background:#151031;margin-top:10px}summary{display:flex;justify-content:space-between;gap:12px;padding:14px;cursor:pointer}summary small{display:block;color:var(--mut);margin-top:4px}.meta{display:flex;gap:10px;flex-wrap:wrap;color:var(--mut);font-size:12px;padding:0 14px 12px}.answers{margin:0;padding:0 20px 16px 34px;color:#e8e3ff}.answers li{margin:10px 0}.answers p{margin:5px 0;color:var(--mut)}.notice{color:var(--gold);line-height:1.7}.hidden{display:none!important}
+    @media(max-width:820px){.grid{grid-template-columns:1fr 1fr}.barrow{grid-template-columns:76px 1fr 36px}}@media(max-width:520px){.grid{grid-template-columns:1fr}.row>*{width:100%}}
+  </style>
+</head>
+<body>
+  <main class="wrap" id="app"></main>
+  <script>
+    const CFG = window.FORGE_AI_LEVEL_7D_CONFIG || {};
+    const TABLE = CFG.TABLE || "ai_level_7d_submissions";
+    const LS_KEY = CFG.LS_KEY || "forge_ailevel_7d_records";
+    const DIMS = {cog:"认知与理解",prompt:"提示与协作",breadth:"工具广度",integ:"工作流整合",auto:"自动化与编排",safe:"批判与安全",create:"创造与赋能"};
+    const app = document.querySelector("#app");
+    let client = null;
+    function hasBackend(){return !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && window.supabase)}
+    function db(){if(!hasBackend())return null;if(!client)client=window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);return client}
+    function esc(v){return String(v??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]))}
+    function layout(inner){app.innerHTML=`<div class="brand"><span class="mk">FORGE</span><span>7维AI段位测评后台</span></div>${inner}`}
+    function localRows(){try{return JSON.parse(localStorage.getItem(LS_KEY)||"[]").map((x,i)=>({id:"local-"+i,created_at:x.createdAt||new Date().toISOString(),...x}))}catch(e){return[]}}
+    async function init(){
+      if(!hasBackend()){render(localRows(),"本地体验模式：这里只能看到当前浏览器保存的数据。要看所有学员，需要在 config.js 填 Supabase URL 和 anon key。");return}
+      const {data:{session}}=await db().auth.getSession();
+      if(!session){login();return}
+      const email=session.user.email;
+      if(CFG.ADMIN_EMAILS && CFG.ADMIN_EMAILS.length && !CFG.ADMIN_EMAILS.includes(email)){
+        layout(`<section class="card"><h1>没有后台权限</h1><p class="lead">${esc(email)} 已登录，但不在管理员白名单中。</p><button class="alt" onclick="logout()">退出</button></section>`);return
+      }
+      await load();
+      db().channel("ai-level-7d-admin").on("postgres_changes",{event:"INSERT",schema:"public",table:TABLE},()=>load()).subscribe();
+    }
+    function login(){layout(`<section class="card"><h1><span class="grad">后台登录</span></h1><p class="lead">输入管理员邮箱，获取登录链接。只有白名单邮箱能读取完整数据。</p><form class="row" id="login"><input type="email" required placeholder="管理员邮箱" /><button>发送登录链接</button></form><p class="notice">如果你还没有配置 Supabase，这里不会发送邮件。</p></section>`);document.querySelector("#login").onsubmit=async e=>{e.preventDefault();const email=e.target.querySelector("input").value.trim();const {error}=await db().auth.signInWithOtp({email,options:{emailRedirectTo:location.href}});alert(error?error.message:"登录链接已发送，请查看邮箱")}}
+    async function logout(){await db()?.auth.signOut();init()} window.logout=logout;
+    async function load(){const {data,error}=await db().from(TABLE).select("*").order("created_at",{ascending:false}).limit(1000);if(error){layout(`<section class="card"><h1>读取失败</h1><p class="notice">${esc(error.message)}</p></section>`);return}render(data||[])}
+    function render(rows,msg=""){
+      const total=rows.length,avg=total?Math.round(rows.reduce((s,r)=>s+(Number(r.composite)||0),0)/total):0;
+      const levels=[1,2,3,4,5].map(l=>rows.filter(r=>Number(r.level)===l).length);
+      const dimAvg={};Object.keys(DIMS).forEach(k=>dimAvg[k]=total?Math.round(rows.reduce((s,r)=>s+(Number((r.norms||{})[k])||0),0)/total):0);
+      layout(`<h1>7维AI段位 <span class="grad">实时数据看板</span></h1><p class="lead">${msg||"查看学员身份、联系方式、每题选择、得分、段位与维度分布。"}</p>
+      <div class="grid"><div class="card stat"><small>总提交</small><b>${total}</b></div><div class="card stat"><small>平均成熟度</small><b>${avg}</b></div><div class="card stat"><small>最新学员</small><b>${esc(rows[0]?.name||"—")}</b></div><div class="card stat"><small>数据表</small><b style="font-size:18px">${esc(TABLE)}</b></div></div>
+      <div class="grid"><section class="card"><h2>段位分布</h2><div class="bars">${levels.map((v,i)=>bar("L"+(i+1),total?v/total*100:0,v)).join("")}</div></section><section class="card" style="grid-column:span 3"><h2>七维平均</h2><div class="bars">${Object.entries(DIMS).map(([k,n])=>bar(n,dimAvg[k],dimAvg[k])).join("")}</div></section></div>
+      <section class="card"><h2>完整提交数据</h2>${rows.map(item).join("")||'<p class="lead">暂无数据。</p>'}</section>`);
+    }
+    function bar(name,pct,val){return `<div class="barrow"><span>${esc(name)}</span><div class="bar"><span style="width:${Math.max(0,Math.min(100,pct))}%"></span></div><b>${esc(val)}</b></div>`}
+    function item(r){return `<details><summary><span><b>${esc(r.name||"(匿名)")}</b><small>${esc(r.contact||"")} · ${esc(r.profession||"")} · ${new Date(r.created_at||r.createdAt||Date.now()).toLocaleString("zh-CN")}</small></span><strong>L${esc(r.level)} · ${esc(r.composite)}</strong></summary><div class="meta"><span>记录ID：${esc(r.id||"")}</span><span>风险标记：${esc((r.flags||[]).join("、")||"无")}</span></div><ol class="answers">${(r.answers||[]).map(a=>`<li><b>${esc(DIMS[a.dim]||a.dim)}</b><p>${esc(a.q)}</p><p>选择：${esc(a.choice)}（${esc(a.score)}分）</p></li>`).join("")}</ol></details>`}
+    init();
+  </script>
+</body>
+</html>
